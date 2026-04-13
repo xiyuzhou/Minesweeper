@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Minesweeper</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/minesweeper_ui.css">
+</head>
+<body>
+
+<div id="game-container">
+  <div style="height: 3rem;"></div>
+  <h2>Minesweeper</h2>
+  <div>
+  <div style="display: flex; align-items: center; justify-content:center ;gap: 0.5rem;">
+    <h4>NoGuessingMode?</h4>
+    <label class="switch">
+      <input type="checkbox" id = "noGuessingModeBT">
+      <span class="slider"></span>
+    </label>
+  </div>
+  <div style="display: flex; align-items: center; justify-content:center ;gap: 0.5rem;">
+    <h4>revealByStep?</h4>
+    <label class="switch">
+      <input type="checkbox" id = "revealByStepBT">
+      <span class="slider"></span>
+    </label>
+  </div>
+  <div id = "gameboard">
+    <div id = "game-controller">
+
+      <div id = "difficulty-tab">
+        <button class="button-old" onclick="setDifficulty('easy')">Easy</button>
+        <button class="button-old" onclick="setDifficulty('medium')">Medium</button>
+        <button class="button-old" onclick="setDifficulty('hard')">Hard</button>
+      </div>
+      <div id = "info-tab">
+        <span class = text_display id="mineCounter"> 10 </span>
+        <button class="button-restart" onclick="initializeGame()" role="button"></button>
+        <span class = text_display id="timer"> 0 </span>
+      </div>
+    </div>
+    <div id="grid"></div>
+  </div>
+</div>
+
+<script src="js/minesweeper.js"></script>
+</body>
+</html>

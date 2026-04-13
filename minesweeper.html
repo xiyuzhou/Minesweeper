@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preload" href="/Minesweeper/Images/flag.svg" as="image">
+  <link rel="preload" href="/Minesweeper/Images/closed.svg" as="image">
+  <link rel="preload" href="/Minesweeper/Images/mines.svg" as="image">
+  <meta charset="UTF-8">
+  <title>Minesweeper</title>
+  <style>
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(10, 30px);
+      grid-template-rows: repeat(10, 30px);
+      gap: 0px;
+      outline: 4px solid #666;
+      box-shadow: 5px 5px 10px 2px #666;
+    }
+    .cell {
+      width: 30px;
+      height: 30px;
+      background: #ddd;
+      border: 0px solid darkgray;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 20px;
+      font-family: "Open Sans", sans-serif;
+      cursor: pointer;
+      background-image: url(/Minesweeper/Images/closed.svg);
+      
+      background-size: 100% auto;
+      user-select: none;
+      -webkit-user-select: none; /* Safari */
+      -ms-user-select: none;  
+    }
+    .revealed {
+      background: #999;
+      cursor: default;
+      box-shadow: inset -1px -1px 0px #666, inset 1px 1px 0px #666;
+      }
+    .mine {
+      background: #999;
+      background-image: url(/Minesweeper/Images/mines.svg);
+      background-size: 100% auto;
+      cursor: default;
+      box-shadow: inset -1px -1px 0px #666, inset 1px 1px 0px #666;
+    }
+    .cell.checking {
+      background-color: #999;
+      background-image: none;
+      box-shadow: inset -1px -1px 0px #666, inset 1px 1px 0px #666;
+      
+    }
+    .flagged.flagged {
+      background-image: url(/Minesweeper/Images/flag.svg), url(/Minesweeper/Images/closed.svg);
+      background-size: 100% auto, 100% auto;
+      background-repeat: no-repeat, no-repeat;
+      background-position: center, center;
+      cursor: default;
+    }
+    .incorrectSelection{
+      color: red;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container" style="display: flex; flex-direction: column; justify-content:center; align-items: center; height: 80vh;">
+  <h2>Minesweeper</h2>
+  <button onclick="InitializateGame()">Restart</button>
+  <div id="grid"></div>
+</div>
+
+<script>
+  let grid = document.getElementById('grid');
+  let width = 10;
+  let height = 10;
+  let mineCount = 5;
+
+  let cells = [];
+  let mines = [];
+  let gridInfo = [];
+  let isStarted = false;
+  let revealedCount = 0;
+  let flagged = new Set();
+
+  let isMouseDown = false;
+  document.addEventListener('mousedown', function() {
+    isMouseDown = true;
+  });
+  document.addEventListener('mouseup', () => {
+    isMouseDown = false;
+    clearChecking();
+  });
+  const directions = [
+    -1, 1, -width, width,
+    -width - 1, -width + 1, width - 1, width + 1
+  ];
+
+  function InitializateGame() {
+    grid.innerHTML = '';
+    cells = [];
+    gridInfo = Array(width * height).fill(0);
+    isStarted = false;
+    mines = [];
+    revealedCount = 0;
+
+    for (let i = 0; i < width * height; i++) {
+      const cell = document.createElement('div');
+      cell.classList.add('cell');
+      cell.dataset.index = i;
+      grid.appendChild(cell);
+      cells.push(cell);
+
+      cell.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        toggleFlag(i);
+      });
+       // Middle click / both buttons / reveal check click
+      cell.addEventListener('mouseenter', (e) => {
+        if (!isMouseDown || e.buttons !== 1) return; // Only while holding left button
+        clearChecking();
+        if (!cell.classList.contains('flagged')) {
+          showChecking(i);
+        }
+      });
+      cell.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // only allow left click for checking
+        clearChecking();
+        if (!cell.classList.contains('flagged')) {
+          showChecking(i);
+        }
+      });
+      cell.addEventListener('mouseup', (e) => {
+        isMouseDown = false;
+        clearChecking();
+        if (e.button === 0 && cell.classList.contains('revealed')) {
+          checkRevealNeighbors(i);
+        }
+        else if (e.button === 0 && !cell.classList.contains('revealed') && !cell.classList.contains('flagged')) {
+          revealCell(i);
+        }
+      });
+    }
+    
+  }
+
+  function GenerateMines(range, count, firstClick) {
+    const array = Array.from({ length: range }, (_, i) => i);
+    array.splice(firstClick, 1); // Don't allow first click to be a mine
+
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+
+    return array.slice(0, count);
+  }
+
+  function buildGridInfo() {
+    gridInfo = Array(width * height).fill(0);
+
+    for (const mine of mines) {
+      gridInfo[mine] = -1;
+
+      const x = mine % width;
+      const y = Math.floor(mine / width);
+
+      for (const dir of directions) {
+        const neighbor = mine + dir;
+        const nx = neighbor % width;
+        const ny = Math.floor(neighbor / width);
+
+        if (
+          neighbor >= 0 && neighbor < width * height &&
+          Math.abs(nx - x) <= 1 &&
+          Math.abs(ny - y) <= 1 &&
+          gridInfo[neighbor] !== -1
+        ) {
+          gridInfo[neighbor]++;
+        }
+      }
+    }
+  }
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function revealCell(index) {
+  if (!isStarted) {
+    mines = GenerateMines(width * height, mineCount, index);
+    buildGridInfo();
+    isStarted = true;
+  }
+
+  if (gridInfo[index] === -1) {
+    const cell = cells[index];
+    cell.classList.add('revealed', 'mine', 'incorrectSelection');
+    cell.textContent = 'X';
+    revealAll();
+    return;
+  }
+
+  const visited = new Set();
+  const queue = [index];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    const cell = cells[current];
+    if (cell.classList.contains('flagged') || cell.classList.contains('revealed')) continue;
+
+    cell.classList.add('revealed');
+    revealedCount++;
+
+    if (gridInfo[current] > 0) {
+      cell.textContent = gridInfo[current];
+      cell.dataset.value = gridInfo[current];
+    }
+
+    await sleep(1000); // This is where the step-by-step animation happens
+
+    if (gridInfo[current] === 0) {
+      const x = current % width;
+      const y = Math.floor(current / width);
+
+      for (const dir of directions) {
+        const neighbor = current + dir;
+        const nx = neighbor % width;
+        const ny = Math.floor(neighbor / width);
+
+        if (
+          neighbor >= 0 && neighbor < width * height &&
+          Math.abs(nx - x) <= 1 &&
+          Math.abs(ny - y) <= 1 &&
+          !visited.has(neighbor)
+        ) {
+          queue.push(neighbor);
+        }
+      }
+    }
+  }
+
+  checkWin();
+}
+
+
+
+  function toggleFlag(index) {
+    const cell = cells[index];
+    if (cell.classList.contains('revealed')) return;
+
+    cell.classList.toggle('flagged');
+    if (cell.classList.contains('flagged')) {
+      flagged.add(index);
+    } else {
+      cell.textContent = '';
+      flagged.delete(index);
+    }
+  }
+
+  function revealAll() {
+    for (let i = 0; i < width * height; i++) {
+      const cell = cells[i];
+      const cell1 = cell.cloneNode(true);
+      cells[i] = cell1;
+      if (gridInfo[i] === -1) {
+        cell.classList.remove('flagged');
+        cell.classList.add('mine');
+      } else {
+        if(cell.classList.contains('flagged')) {
+          cell.classList.remove('flagged');
+          cell.classList.add('incorrectSelection');
+        }
+        cell.classList.add('revealed');
+        if (gridInfo[i] > 0) {
+          cell.textContent = gridInfo[i];
+        }
+      }
+    }
+    }
+
+  function showChecking(index) {
+    const x = index % width;
+    const y = Math.floor(index / width);
+    const cell = cells[index];
+    cell.classList.add('checking');
+
+    if (!cell.classList.contains('revealed')){
+      return;
+    }
+    for (const dir of directions) {
+      const neighbor = index + dir;
+      const nx = neighbor % width;
+      const ny = Math.floor(neighbor / width);
+
+      if (
+        neighbor >= 0 && neighbor < width * height &&
+        Math.abs(nx - x) <= 1 &&
+        Math.abs(ny - y) <= 1
+      ) {
+        const nCell = cells[neighbor];
+        if (!nCell.classList.contains('revealed')&& !nCell.classList.contains('flagged')) {
+          nCell.classList.add('checking');
+        }
+      }
+    }
+  }
+
+  function clearChecking() {
+    cells.forEach(cell => {
+      cell.classList.remove('checking');
+    });
+  }
+
+  function checkRevealNeighbors(index) {
+    const number = gridInfo[index];
+    if (number <= 0) return;
+
+    let flagCount = 0;
+    const toReveal = [];
+
+    const x = index % width;
+    const y = Math.floor(index / width);
+
+    for (const dir of directions) {
+      const neighbor = index + dir;
+      const nx = neighbor % width;
+      const ny = Math.floor(neighbor / width);
+
+      if (
+        neighbor >= 0 && neighbor < width * height &&
+        Math.abs(nx - x) <= 1 &&
+        Math.abs(ny - y) <= 1
+      ) {
+        const nCell = cells[neighbor];
+        if (nCell.classList.contains('flagged')) {
+          flagCount++;
+        } else if (!nCell.classList.contains('revealed')) {
+          toReveal.push(neighbor);
+        }
+      }
+    }
+
+    if (flagCount === number) {
+      toReveal.forEach(i => revealCell(i));
+    }
+  }
+
+  function checkWin() {
+    const totalSafeCells = width * height - mineCount;
+    if (revealedCount === totalSafeCells) {
+      //alert('🎉 You win!');
+      revealAll();
+    }
+  }
+
+  // Auto-start game
+  InitializateGame();
+</script>
+
+</body>
+</html>
